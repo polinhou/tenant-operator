@@ -1,0 +1,14 @@
+apiVersion: tenant.polinhou.dev/v1
+kind: Tenant
+metadata:
+  name: sample-tenant
+spec:
+  managed: true
+  namespace: sample-namespace
+  resourceQuota:
+    hard:
+      requests.cpu: "1"
+      requests.memory: 1Gi
+      limits.cpu: "2"
+      limits.memory: 2Gi
+      pods: "4"
