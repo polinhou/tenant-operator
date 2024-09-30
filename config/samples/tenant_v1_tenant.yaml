@@ -4,7 +4,7 @@ metadata:
   name: sample-tenant
 spec:
   managed: true
-  namespace: sample-namespace
+  namespace: sample-tenant
   resourceQuota:
     hard:
       requests.cpu: "1"

@@ -30,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	tenantv1 "github.com/polinhou/tenant-operator/api/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TenantReconciler reconciles a Tenant object
@@ -62,7 +64,7 @@ func (r *TenantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Tenant resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
+			return r.cleanupNamespace(ctx, req.Name)
 		}
 		log.Error(err, "Failed to get Tenant")
 		return ctrl.Result{}, err
@@ -151,6 +153,47 @@ func (r *TenantReconciler) reconcileResourceQuota(ctx context.Context, tenant *t
 	}
 
 	return nil
+}
+
+func (r *TenantReconciler) cleanupNamespace(ctx context.Context, tenantName string) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	// Fetch the Tenant to get the namespace name
+	tenant := &tenantv1.Tenant{}
+	err := r.Get(ctx, client.ObjectKey{Name: tenantName}, tenant)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "Unable to fetch Tenant for cleanup")
+			return ctrl.Result{}, err
+		}
+		// Tenant not found, which means it's already deleted
+		// We need to find the associated namespace by other means
+		// For example, you could use a label selector if you've labeled the namespace
+		// Or you could use a naming convention
+		// For this example, let's assume the namespace name is the same as the tenant name
+		namespaceName := tenantName
+		log.Info("Tenant not found, using tenant name as namespace name", "name", namespaceName)
+
+		// Delete the associated namespace
+		namespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespaceName,
+			},
+		}
+		err = r.Delete(ctx, namespace)
+		if err != nil && !apierrors.IsNotFound(err) {
+			log.Error(err, "Unable to delete Namespace")
+			return ctrl.Result{}, err
+		}
+
+		log.Info("Namespace deleted", "namespace", namespaceName)
+		return ctrl.Result{}, nil
+	}
+
+	// If we get here, it means the Tenant still exists
+	// This shouldn't happen in normal operation, but let's handle it just in case
+	log.Info("Tenant still exists, not deleting namespace", "tenant", tenantName)
+	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
